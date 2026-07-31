@@ -179,7 +179,12 @@ def build_parser(*, prog: str = "trainfoundry") -> AgentArgumentParser:
     _leaf(fetch_list, "fetch.list", _handle_fetch_list)
 
     fetch_run = fetch_commands.add_parser("run", help="fetch dataset sources")
-    fetch_run.add_argument("source_ids", nargs="*", choices=sorted(SOURCES))
+    fetch_run.add_argument(
+        "source_ids",
+        nargs="*",
+        type=_source_id,
+        metavar="SOURCE_ID",
+    )
     targets = fetch_run.add_mutually_exclusive_group()
     targets.add_argument("--group", choices=sorted(SOURCE_GROUPS))
     targets.add_argument("--all", action="store_true", dest="fetch_all")
@@ -237,6 +242,15 @@ def _leaf(
         help="output format",
     )
     parser.set_defaults(command_name=command_name, handler=handler)
+
+
+def _source_id(value: str) -> str:
+    if value not in SOURCES:
+        supported = ", ".join(sorted(SOURCES))
+        raise argparse.ArgumentTypeError(
+            f"unknown source {value!r}; supported: {supported}"
+        )
+    return value
 
 
 def _handle_commands(args: argparse.Namespace) -> dict[str, Any]:

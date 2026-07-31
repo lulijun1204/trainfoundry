@@ -48,6 +48,15 @@ def test_missing_fetch_target_returns_structured_usage_error(capsys):
     }
 
 
+def test_unknown_fetch_source_returns_structured_usage_error(capsys):
+    exit_code = main(["fetch", "run", "unknown", "--output", "json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 2
+    assert payload["error"]["code"] == "INVALID_ARGUMENT"
+    assert "unknown source 'unknown'" in payload["error"]["message"]
+
+
 def test_missing_registry_record_returns_not_found(capsys, monkeypatch):
     monkeypatch.setattr(
         "trainfoundry.cli.DatasetRegistry.find",
