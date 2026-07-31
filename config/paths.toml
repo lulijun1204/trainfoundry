@@ -1,0 +1,8 @@
+# Paths are relative to the project root unless they are absolute.
+
+[paths]
+text_path = "model_data/text"
+multimodal_path = "model_data/multimodal"
+robot_path = "model_data/robot"
+registry_path = "model_data/text/source_registry.json"
+metadata_db_path = ".trainfoundry/metadata.db"

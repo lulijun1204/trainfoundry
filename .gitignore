@@ -1,0 +1,27 @@
+.DS_Store
+.idea/
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+.trainfoundry/
+.coverage
+htmlcov/
+
+# Raw datasets and generated artifacts must not be committed.
+data/
+model_data/
+*.part
+*.rar
+*.zip
+*.warc
+*.warc.gz
+*.warc.wet.gz
+
+# Local credentials and environment overrides.
+.env
+.env.*
+!.env.example
+credentials.json
+secrets.toml

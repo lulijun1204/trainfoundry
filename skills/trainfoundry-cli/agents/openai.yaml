@@ -1,0 +1,4 @@
+interface:
+  display_name: "TrainFoundry CLI"
+  short_description: "Operate TrainFoundry datasets and metadata through its CLI"
+  default_prompt: "Use $trainfoundry-cli and the tf command to inspect, plan, fetch, verify, or manage TrainFoundry dataset metadata."
