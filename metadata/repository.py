@@ -14,6 +14,17 @@ from metadata.errors import (
     MetadataNotFoundError,
     MetadataValidationError,
 )
+from metadata.models import (
+    DatasetRun,
+    DatasetRunStatus,
+    DatasetRunType,
+    DatasetSplit,
+    DatasetVersion,
+    DatasetVersionStage,
+    DatasetVersionStatus,
+    OutputMode,
+    SchemaFormat,
+)
 
 PURPOSES = {"PRETRAIN", "SFT", "RL", "BENCHMARK"}
 MODALITIES = {"TEXT", "IMAGE", "AUDIO", "VIDEO", "ROBOT_STATE", "ACTION"}
@@ -240,7 +251,7 @@ class MetadataRepository:
         usage_tags: Iterable[str] | None = None,
         row_count: int | None = None,
         byte_size: int | None = None,
-    ) -> dict[str, Any]:
+    ) -> DatasetVersion:
         version_id = version_id or _new_id("dv")
         stage = _enum(stage, VERSION_STAGES, "stage")
         status = _enum(status, VERSION_STATUSES, "status")
@@ -312,20 +323,24 @@ class MetadataRepository:
                     committed_at,
                 ),
             )
-            return self._get(
-                connection,
-                "dataset_versions",
-                "version_id",
-                version_id,
+            return _dataset_version(
+                self._get(
+                    connection,
+                    "dataset_versions",
+                    "version_id",
+                    version_id,
+                )
             )
 
-    def get_version(self, version_id: str) -> dict[str, Any]:
+    def get_version(self, version_id: str) -> DatasetVersion:
         with self.database.connect() as connection:
-            return self._get(
-                connection,
-                "dataset_versions",
-                "version_id",
-                version_id,
+            return _dataset_version(
+                self._get(
+                    connection,
+                    "dataset_versions",
+                    "version_id",
+                    version_id,
+                )
             )
 
     def find_version_by_content_digest(
@@ -333,7 +348,7 @@ class MetadataRepository:
         dataset_id: str,
         content_digest: str,
         storage_uri: str | None = None,
-    ) -> dict[str, Any] | None:
+    ) -> DatasetVersion | None:
         """Find a content-identical version, optionally at one storage URI."""
         digest = _digest(content_digest, "content_digest")
         storage_clause = " AND storage_uri = ?" if storage_uri is not None else ""
@@ -353,7 +368,7 @@ class MetadataRepository:
                 """,
                 params,
             ).fetchone()
-        return _record(row) if row is not None else None
+        return _dataset_version(_record(row)) if row is not None else None
 
     def list_versions(
         self,
@@ -363,7 +378,7 @@ class MetadataRepository:
         status: str | None = None,
         split: str | None = None,
         limit: int = 100,
-    ) -> list[dict[str, Any]]:
+    ) -> list[DatasetVersion]:
         clauses = []
         params: list[Any] = []
         for name, value, choices in (
@@ -377,15 +392,18 @@ class MetadataRepository:
         if dataset_id is not None:
             clauses.append("dataset_id = ?")
             params.append(dataset_id)
-        return self._list(
-            "dataset_versions",
-            clauses,
-            params,
-            "dataset_id, version_number",
-            limit,
-        )
+        return [
+            _dataset_version(record)
+            for record in self._list(
+                "dataset_versions",
+                clauses,
+                params,
+                "dataset_id, version_number",
+                limit,
+            )
+        ]
 
-    def update_version(self, version_id: str, **changes: Any) -> dict[str, Any]:
+    def update_version(self, version_id: str, **changes: Any) -> DatasetVersion:
         allowed = {
             "stage",
             "status",
@@ -440,11 +458,13 @@ class MetadataRepository:
                 )
             if existing["committed_at"] is None:
                 values["committed_at"] = _timestamp_expression()
-        return self._update(
-            "dataset_versions",
-            "version_id",
-            version_id,
-            values,
+        return _dataset_version(
+            self._update(
+                "dataset_versions",
+                "version_id",
+                version_id,
+                values,
+            )
         )
 
     def create_run(
@@ -465,7 +485,7 @@ class MetadataRepository:
         started_at: str | None = None,
         finished_at: str | None = None,
         error_message: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> DatasetRun:
         run_id = run_id or _new_id("run")
         run_type = _enum(run_type, RUN_TYPES, "run_type")
         output_mode = _enum(output_mode, OUTPUT_MODES, "output_mode")
@@ -513,11 +533,15 @@ class MetadataRepository:
                     _required(created_by, "created_by"),
                 ),
             )
-            return self._get(connection, "dataset_runs", "run_id", run_id)
+            return _dataset_run(
+                self._get(connection, "dataset_runs", "run_id", run_id)
+            )
 
-    def get_run(self, run_id: str) -> dict[str, Any]:
+    def get_run(self, run_id: str) -> DatasetRun:
         with self.database.connect() as connection:
-            return self._get(connection, "dataset_runs", "run_id", run_id)
+            return _dataset_run(
+                self._get(connection, "dataset_runs", "run_id", run_id)
+            )
 
     def list_runs(
         self,
@@ -526,7 +550,7 @@ class MetadataRepository:
         status: str | None = None,
         target_dataset_id: str | None = None,
         limit: int = 100,
-    ) -> list[dict[str, Any]]:
+    ) -> list[DatasetRun]:
         clauses = []
         params: list[Any] = []
         if run_type is not None:
@@ -538,7 +562,12 @@ class MetadataRepository:
         if target_dataset_id is not None:
             clauses.append("target_dataset_id = ?")
             params.append(target_dataset_id)
-        return self._list("dataset_runs", clauses, params, "created_at, run_id", limit)
+        return [
+            _dataset_run(record)
+            for record in self._list(
+                "dataset_runs", clauses, params, "created_at, run_id", limit
+            )
+        ]
 
     def update_run(
         self,
@@ -548,7 +577,7 @@ class MetadataRepository:
         started_at: str | None = None,
         finished_at: str | None = None,
         error_message: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> DatasetRun:
         values: dict[str, Any] = {
             "status": _enum(status, RUN_STATUSES, "status"),
         }
@@ -558,7 +587,9 @@ class MetadataRepository:
             values["finished_at"] = finished_at
         if error_message is not None:
             values["error_message"] = error_message
-        return self._update("dataset_runs", "run_id", run_id, values)
+        return _dataset_run(
+            self._update("dataset_runs", "run_id", run_id, values)
+        )
 
     def create_lineage(
         self,
@@ -1200,6 +1231,57 @@ def _record(row: sqlite3.Row | None) -> dict[str, Any]:
         else:
             result[key] = value
     return result
+
+
+def _dataset_version(record: Mapping[str, Any]) -> DatasetVersion:
+    """Hydrate the complete version domain model from a decoded SQLite row."""
+    return DatasetVersion(
+        version_id=record["version_id"],
+        dataset_id=record["dataset_id"],
+        version_number=record["version_number"],
+        stage=DatasetVersionStage(record["stage"]),
+        status=DatasetVersionStatus(record["status"]),
+        storage_uri=record["storage_uri"],
+        storage_format=record["storage_format"],
+        schema_format=SchemaFormat(record["schema_format"]),
+        schema_definition=dict(record["schema_definition"]),
+        schema_version=record["schema_version"],
+        schema_digest=record["schema_digest"],
+        content_digest=record["content_digest"],
+        split=DatasetSplit(record["split"]) if record["split"] is not None else None,
+        usage_tags=(
+            tuple(record["usage_tags"])
+            if record["usage_tags"] is not None
+            else None
+        ),
+        row_count=record["row_count"],
+        byte_size=record["byte_size"],
+        created_by=record["created_by"],
+        created_at=record["created_at"],
+        committed_at=record["committed_at"],
+    )
+
+
+def _dataset_run(record: Mapping[str, Any]) -> DatasetRun:
+    """Hydrate the complete run domain model from a decoded SQLite row."""
+    return DatasetRun(
+        run_id=record["run_id"],
+        run_type=DatasetRunType(record["run_type"]),
+        operator_name=record["operator_name"],
+        operator_version=record["operator_version"],
+        operator_fingerprint=record["operator_fingerprint"],
+        params=dict(record["params"]),
+        compute_key=record["compute_key"],
+        deterministic=record["deterministic"],
+        output_mode=OutputMode(record["output_mode"]),
+        target_dataset_id=record["target_dataset_id"],
+        status=DatasetRunStatus(record["status"]),
+        started_at=record["started_at"],
+        finished_at=record["finished_at"],
+        error_message=record["error_message"],
+        created_by=record["created_by"],
+        created_at=record["created_at"],
+    )
 
 
 def _new_id(prefix: str) -> str:

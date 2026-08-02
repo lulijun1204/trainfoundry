@@ -267,10 +267,10 @@ def test_service_registers_download_in_relational_metadata_idempotently(
     assert datasets[0]["name"] == "governed"
     assert datasets[0]["purpose"] == "PRETRAIN"
     assert len(versions) == 1
-    assert versions[0]["status"] == "COMMITTED"
-    assert versions[0]["byte_size"] == len(b"downloaded")
+    assert versions[0].status == "COMMITTED"
+    assert versions[0].byte_size == len(b"downloaded")
     assert first.metadata_dataset_id == datasets[0]["dataset_id"]
-    assert first.metadata_version_id == versions[0]["version_id"]
+    assert first.metadata_version_id == versions[0].version_id
     assert second.metadata_version_id == first.metadata_version_id
     assert forced.metadata_version_id == first.metadata_version_id
     assert len(registry.records) == 2

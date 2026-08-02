@@ -66,7 +66,7 @@ class FetchMetadataRegistrar:
             storage_uri,
         )
         if existing is not None:
-            return dataset["dataset_id"], existing["version_id"]
+            return dataset["dataset_id"], existing.version_id
 
         schema = _schema_definition(meta, record)
         version = self.repository.create_version(
@@ -83,7 +83,7 @@ class FetchMetadataRegistrar:
             byte_size=record.total_bytes,
             created_by="fetch-service",
         )
-        return dataset["dataset_id"], version["version_id"]
+        return dataset["dataset_id"], version.version_id
 
     def _find_dataset(self, meta: DatasetMeta) -> dict[str, Any] | None:
         return self.repository.find_dataset(meta.namespace, meta.source_id)

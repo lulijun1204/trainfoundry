@@ -507,23 +507,26 @@ def _handle_version_create(args: argparse.Namespace) -> dict[str, Any]:
             row_count=args.row_count,
             byte_size=args.byte_size,
             created_by=args.created_by,
-        )
+        ).to_dict()
     }
 
 
 def _handle_version_get(args: argparse.Namespace) -> dict[str, Any]:
-    return {"version": MetadataRepository().get_version(args.version_id)}
+    return {"version": MetadataRepository().get_version(args.version_id).to_dict()}
 
 
 def _handle_version_list(args: argparse.Namespace) -> dict[str, Any]:
     return {
-        "versions": MetadataRepository().list_versions(
-            dataset_id=args.dataset_id,
-            stage=args.stage,
-            status=args.status,
-            split=args.split,
-            limit=args.limit,
-        )
+        "versions": [
+            version.to_dict()
+            for version in MetadataRepository().list_versions(
+                dataset_id=args.dataset_id,
+                stage=args.stage,
+                status=args.status,
+                split=args.split,
+                limit=args.limit,
+            )
+        ]
     }
 
 
@@ -549,7 +552,7 @@ def _handle_version_update(args: argparse.Namespace) -> dict[str, Any]:
                     "byte_size": "byte_size",
                 },
             ),
-        )
+        ).to_dict()
     }
 
 
@@ -571,22 +574,25 @@ def _handle_run_create(args: argparse.Namespace) -> dict[str, Any]:
             finished_at=args.finished_at,
             error_message=args.error_message,
             created_by=args.created_by,
-        )
+        ).to_dict()
     }
 
 
 def _handle_run_get(args: argparse.Namespace) -> dict[str, Any]:
-    return {"run": MetadataRepository().get_run(args.run_id)}
+    return {"run": MetadataRepository().get_run(args.run_id).to_dict()}
 
 
 def _handle_run_list(args: argparse.Namespace) -> dict[str, Any]:
     return {
-        "runs": MetadataRepository().list_runs(
-            run_type=args.run_type,
-            status=args.status,
-            target_dataset_id=args.target_dataset_id,
-            limit=args.limit,
-        )
+        "runs": [
+            run.to_dict()
+            for run in MetadataRepository().list_runs(
+                run_type=args.run_type,
+                status=args.status,
+                target_dataset_id=args.target_dataset_id,
+                limit=args.limit,
+            )
+        ]
     }
 
 
@@ -598,7 +604,7 @@ def _handle_run_update(args: argparse.Namespace) -> dict[str, Any]:
             started_at=args.started_at,
             finished_at=args.finished_at,
             error_message=args.error_message,
-        )
+        ).to_dict()
     }
 
 

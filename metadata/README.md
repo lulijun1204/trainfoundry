@@ -105,6 +105,16 @@ DatasetVersion, DatasetRun, QualityResultSet, AnnotationResultSet, and
 TrainingRun. It also supports lineage edge creation and recursive tracing, plus
 TrainingRunDatasetVersion binding.
 
+DatasetVersion and DatasetRun operations return frozen domain models covering
+every column in their respective tables. `DatasetVersion` is a persisted source
+or materialization boundary; pipeline operators exchange a non-persistent
+`ExecutionDataset` containing a lazy `BlockStream[pyarrow.RecordBatch]`
+instead. Runtime batches are never metadata entities and are not stored in
+SQLite. `PipelineExecutor` creates one metadata-only
+`DatasetRun` for every operator invocation, and a Materializer creates a new
+Lance DatasetVersion only at an explicit persistence boundary. Use each domain
+model's `to_dict()` method at JSON boundaries such as custom CLI integrations.
+
 Writes use transactions. Database integrity failures are translated into
 domain errors:
 

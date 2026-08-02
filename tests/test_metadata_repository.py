@@ -2,7 +2,14 @@ from hashlib import sha256
 
 import pytest
 
-from metadata import MetadataConflictError, MetadataRepository
+from metadata import (
+    DatasetRun,
+    DatasetRunStatus,
+    DatasetVersion,
+    DatasetVersionStatus,
+    MetadataConflictError,
+    MetadataRepository,
+)
 from metadata.database import DOMAIN_TABLES
 
 
@@ -91,27 +98,62 @@ def test_dataset_crud_and_namespace_name_uniqueness(repository):
         _dataset(repository)
 
 
+def test_version_repository_returns_complete_domain_model(repository):
+    dataset = _dataset(repository)
+    created = repository.create_version(
+        dataset_id=dataset["dataset_id"],
+        stage="RAW",
+        status="COMMITTED",
+        storage_uri="file:///datasets/full-model",
+        storage_format="LANCE",
+        schema_format="ARROW",
+        schema_definition={"fields": [{"name": "text", "type": "utf8"}]},
+        schema_version="v1",
+        schema_digest=_digest("full-schema"),
+        content_digest=_digest("full-content"),
+        split="TRAIN",
+        usage_tags=("pretrain", "english"),
+        row_count=12,
+        byte_size=345,
+        created_by="tester",
+    )
+
+    assert isinstance(created, DatasetVersion)
+    assert created.version_number == 1
+    assert created.schema_definition["fields"][0]["name"] == "text"
+    assert created.usage_tags == ("pretrain", "english")
+    assert created.created_at
+    assert created.committed_at
+    assert repository.get_version(created.version_id) == created
+    assert repository.find_version_by_content_digest(
+        dataset["dataset_id"], created.content_digest
+    ) == created
+    assert repository.list_versions(dataset_id=dataset["dataset_id"]) == [created]
+    with pytest.raises(AttributeError):
+        created.status = DatasetVersionStatus.PUBLISHED
+
+
 def test_committed_version_is_immutable_but_status_can_change(repository):
     dataset = _dataset(repository)
     version = _version(repository, dataset["dataset_id"])
 
-    committed = repository.update_version(version["version_id"], status="COMMITTED")
-    assert committed["committed_at"]
+    committed = repository.update_version(version.version_id, status="COMMITTED")
+    assert committed.committed_at
 
     with pytest.raises(MetadataConflictError, match="immutable"):
         repository.update_version(
-            version["version_id"],
+            version.version_id,
             storage_uri="file:///datasets/replaced",
         )
 
-    published = repository.update_version(version["version_id"], status="PUBLISHED")
-    assert published["status"] == "PUBLISHED"
+    published = repository.update_version(version.version_id, status="PUBLISHED")
+    assert published.status is DatasetVersionStatus.PUBLISHED
 
 
 def test_successful_deterministic_compute_key_is_unique(repository):
     dataset = _dataset(repository)
     first = _run(repository, dataset["dataset_id"], status="SUCCEEDED")
-    assert first["deterministic"] is True
+    assert first.deterministic is True
 
     with pytest.raises(MetadataConflictError, match="compute_key"):
         repository.create_run(
@@ -119,12 +161,27 @@ def test_successful_deterministic_compute_key_is_unique(repository):
             operator_name="other",
             operator_version="2.0",
             operator_fingerprint=_digest("other-operator"),
-            compute_key=first["compute_key"],
+            compute_key=first.compute_key,
             output_mode="NEW_VERSION",
             target_dataset_id=dataset["dataset_id"],
             status="SUCCEEDED",
             created_by="tester",
         )
+
+
+def test_run_repository_returns_complete_domain_model(repository):
+    dataset = _dataset(repository)
+    created = _run(repository, dataset["dataset_id"])
+
+    assert isinstance(created, DatasetRun)
+    assert created.params == {}
+    assert created.target_dataset_id == dataset["dataset_id"]
+    assert created.status is DatasetRunStatus.PENDING
+    assert repository.get_run(created.run_id) == created
+    assert repository.list_runs(target_dataset_id=dataset["dataset_id"]) == [created]
+
+    finished = repository.update_run(created.run_id, status="SUCCEEDED")
+    assert finished.status is DatasetRunStatus.SUCCEEDED
 
 
 def test_recursive_lineage_traces_upstream_and_downstream(repository):
@@ -136,27 +193,27 @@ def test_recursive_lineage_traces_upstream_and_downstream(repository):
     second_run = _run(repository, dataset["dataset_id"], "run-2")
 
     repository.create_lineage(
-        run_id=first_run["run_id"],
-        source_version_id=first["version_id"],
-        target_version_id=second["version_id"],
+        run_id=first_run.run_id,
+        source_version_id=first.version_id,
+        target_version_id=second.version_id,
         relation_type="DERIVED_FROM",
     )
     repository.create_lineage(
-        run_id=second_run["run_id"],
-        source_version_id=second["version_id"],
-        target_version_id=third["version_id"],
+        run_id=second_run.run_id,
+        source_version_id=second.version_id,
+        target_version_id=third.version_id,
         relation_type="FILTERED_FROM",
     )
 
-    graph = repository.get_lineage(second["version_id"])
+    graph = repository.get_lineage(second.version_id)
 
-    assert graph["upstream"][0]["source_version_id"] == first["version_id"]
-    assert graph["downstream"][0]["target_version_id"] == third["version_id"]
+    assert graph["upstream"][0]["source_version_id"] == first.version_id
+    assert graph["downstream"][0]["target_version_id"] == third.version_id
     assert (
-        repository.get_lineage(third["version_id"], direction="upstream")[
+        repository.get_lineage(third.version_id, direction="upstream")[
             "upstream"
         ][1]["source_version_id"]
-        == first["version_id"]
+        == first.version_id
     )
 
 
@@ -183,8 +240,8 @@ def test_results_and_training_bindings_follow_version_rules(repository):
     )
 
     quality = repository.create_quality_result(
-        dataset_version_id=version["version_id"],
-        run_id=quality_run["run_id"],
+        dataset_version_id=version.version_id,
+        run_id=quality_run.run_id,
         evaluator_name="quality",
         evaluator_version="1",
         status="SUCCEEDED",
@@ -192,8 +249,8 @@ def test_results_and_training_bindings_follow_version_rules(repository):
         summary={"score": 0.99},
     )
     annotation = repository.create_annotation_result(
-        dataset_version_id=version["version_id"],
-        run_id=annotation_run["run_id"],
+        dataset_version_id=version.version_id,
+        run_id=annotation_run.run_id,
         annotation_schema_version="labels-v1",
         producer_type="MODEL",
         coverage=0.9,
@@ -210,14 +267,14 @@ def test_results_and_training_bindings_follow_version_rules(repository):
     with pytest.raises(MetadataConflictError, match="COMMITTED"):
         repository.bind_training_version(
             training_run_id=training["training_run_id"],
-            dataset_version_id=version["version_id"],
+            dataset_version_id=version.version_id,
             role="TRAIN",
         )
 
-    repository.update_version(version["version_id"], status="COMMITTED")
+    repository.update_version(version.version_id, status="COMMITTED")
     binding = repository.bind_training_version(
         training_run_id=training["training_run_id"],
-        dataset_version_id=version["version_id"],
+        dataset_version_id=version.version_id,
         role="TRAIN",
         weight=0.75,
     )

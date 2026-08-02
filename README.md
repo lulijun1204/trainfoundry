@@ -5,6 +5,13 @@
 TrainFoundry is a hands-on project for exploring the training-data lifecycle
 across text, image, video, and robot-trajectory data.
 
+For concrete, abstraction-free walkthroughs of the actual data operations, see:
+
+- [`pipeline/examples/data_processing/wikitext/`](pipeline/examples/data_processing/wikitext/README.md)
+  for JSONL validation, normalization, Arrow batching, Lance writing, and read-back;
+- [`pipeline/examples/data_processing/common_crawl/`](pipeline/examples/data_processing/common_crawl/README.md)
+  for streaming gzip/WARC-WET file-format and conversion-record validation.
+
 The current milestone implements reproducible source ingestion: dataset
 fetchers, resumable archive downloads, file-size and SHA-256 metadata, a shared
 source registry, and an offline-RL loading demo. Transformation, immutable
@@ -291,6 +298,17 @@ uv run python main.py
 
 The demo loads the configured Minari dataset and prints its step, episode, and
 sample schema.
+
+Run the learning-oriented full validation in two explicit stages:
+
+```bash
+uv run python -m pipeline.examples.data_processing.minari_pointmaze.step_01_validate_file_format
+uv run python -m pipeline.examples.data_processing.minari_pointmaze.step_02_validate_data
+```
+
+The first command validates and hashes the physical Minari package; the second
+checks every trajectory's temporal schema and PointMaze semantics. Both produce
+quality results only and do not create a new DatasetVersion.
 
 ## Fetch architecture
 
